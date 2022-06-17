@@ -1,5 +1,5 @@
 //
-//  ImageService.swift
+//  AZCachedAsyncImageService.swift
 //  AZCachedAsyncImage
 //
 //  Created by Adam Zarn on 2/21/22.
