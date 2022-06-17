@@ -8,7 +8,7 @@
 import SwiftUI
 
 public struct AZCachedAsyncImage<I: View, P: View>: View {
-    @StateObject var imageService = ImageService()
+    @StateObject var imageService = AZCachedAsyncImageService()
     let url: URL?
     var content: (Image) -> I
     var placeholder: () -> P
