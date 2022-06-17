@@ -35,7 +35,7 @@ public class AZCachedAsyncImageService: ObservableObject {
         }
     }
     
-    private func eagerLoadImage(url: URL) async throws {
+    private static func eagerLoadImage(url: URL) async throws {
         let urlString = url.absoluteString
         guard ImageCache.shared[urlString] == nil else { return }
         do {
@@ -47,7 +47,7 @@ public class AZCachedAsyncImageService: ObservableObject {
         }
     }
     
-    public func eagerLoadImages(from urlStrings: [String]) async throws {
+    public static func eagerLoadImages(from urlStrings: [String]) async throws {
         let urls = urlStrings.compactMap { URL(string: $0) }
         await withThrowingTaskGroup(of: Void.self) { group in
             for url in urls {
