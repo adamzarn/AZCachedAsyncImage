@@ -19,15 +19,15 @@ public class AZCachedAsyncImageService: ObservableObject {
             self.uiImage = UIImage()
             throw AZCachedAsyncImageServiceError.invalidUrl
         }
-        let urlString = url.absoluteString
-        if let uiImage = ImageCache.shared[urlString] {
+        let cacheKey = AZCachedAsyncImageService.getKey(for: url, and: size)
+        if let uiImage = ImageCache.shared[cacheKey] {
             DispatchQueue.main.async {
                 self.uiImage = uiImage
             }
         } else {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
-                let uiImage = AZCachedAsyncImageService.cacheAndReturnImage(urlString: urlString,
+                let uiImage = AZCachedAsyncImageService.cacheAndReturnImage(key: cacheKey,
                                                                             data: data,
                                                                             size: size)
                 DispatchQueue.main.async {
@@ -39,12 +39,20 @@ public class AZCachedAsyncImageService: ObservableObject {
         }
     }
     
+    private static func getKey(for url: URL, and size: CGSize?) -> String {
+        var key = url.absoluteString
+        if let size = size {
+            key += "/\(size.width)/\(size.height)"
+        }
+        return key
+    }
+    
     private static func eagerLoadImage(url: URL, size: CGSize? = nil) async throws {
-        let urlString = url.absoluteString
-        guard ImageCache.shared[urlString] == nil else { return }
+        let cacheKey = getKey(for: url, and: size)
+        guard ImageCache.shared[cacheKey] == nil else { return }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            _ = cacheAndReturnImage(urlString: urlString, data: data, size: size)
+            _ = cacheAndReturnImage(key: cacheKey, data: data, size: size)
         } catch {
             throw error
         }
@@ -61,16 +69,16 @@ public class AZCachedAsyncImageService: ObservableObject {
         }
     }
     
-    private static func cacheAndReturnImage(urlString: String,
+    private static func cacheAndReturnImage(key: String,
                                             data: Data,
                                             size: CGSize? = nil) -> UIImage? {
         let originalImage = UIImage(data: data)
         if let size = size {
             let resizedImage = resizeImage(image: originalImage, targetSize: size)
-            ImageCache.shared[urlString] = resizedImage
+            ImageCache.shared[key] = resizedImage
             return resizedImage
         } else {
-            ImageCache.shared[urlString] = originalImage
+            ImageCache.shared[key] = originalImage
             return originalImage
         }
     }
@@ -79,26 +87,18 @@ public class AZCachedAsyncImageService: ObservableObject {
         guard let image = image else { return nil }
         let size = image.size
         
-        let widthRatio = targetSize.width  / size.width
-        let heightRatio = targetSize.height / size.height
+        let widthRatio = targetSize.width/size.width
+        let heightRatio = targetSize.height/size.height
         
-        // Figure out what our orientation is, and use that to form the rectangle
-        var newSize: CGSize
-        if(widthRatio > heightRatio) {
-            newSize = CGSize(width: size.width * heightRatio, height: size.height * heightRatio)
-        } else {
-            newSize = CGSize(width: size.width * widthRatio,  height: size.height * widthRatio)
-        }
-        
-        // This is the rect that we've calculated out and this is what is actually used below
+        let ratio = widthRatio > heightRatio ? heightRatio : widthRatio
+        let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
         let rect = CGRect(x: 0, y: 0, width: newSize.width, height: newSize.height)
         
-        // Actually do the resizing to the rect using the ImageContext stuff
         UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
         image.draw(in: rect)
         let newImage = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
         
-        return newImage!
+        return newImage
     }
 }
