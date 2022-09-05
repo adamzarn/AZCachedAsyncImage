@@ -27,9 +27,10 @@ public class AZCachedAsyncImageService: ObservableObject {
         let cacheKey = url.absoluteString
         if let cachedImage = AZImageCache.shared[cacheKey] {
             if let size = size {
-                let resizedImage = AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size)
-                DispatchQueue.main.async {
-                    self.uiImage = resizedImage
+                AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size) { resizedImage in
+                    DispatchQueue.main.async {
+                        self.uiImage = resizedImage
+                    }
                 }
             }
             DispatchQueue.main.async {
@@ -37,11 +38,12 @@ public class AZCachedAsyncImageService: ObservableObject {
             }
         } else {
             let (data, _) = try await URLSession.shared.data(from: url)
-            let cachedImage = AZCachedAsyncImageService.cacheAndReturnImage(key: cacheKey,
-                                                                            data: data,
-                                                                            size: size)
-            DispatchQueue.main.async {
-                self.uiImage = cachedImage
+            AZCachedAsyncImageService.cacheAndReturnImage(key: cacheKey,
+                                                          data: data,
+                                                          size: size) { cachedImage in
+                DispatchQueue.main.async {
+                    self.uiImage = cachedImage
+                }
             }
         }
     }
@@ -61,67 +63,56 @@ public class AZCachedAsyncImageService: ObservableObject {
     }
     
     private func publishImage(using data: Data, size: CGSize?) {
-        var cachedImage = UIImage(data: data)
+        let cachedImage = UIImage(data: data)
         if let size = size {
-            cachedImage = AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size)
-        }
-        DispatchQueue.main.async {
-            self.uiImage = cachedImage
-        }
-    }
-    
-    private static func eagerLoadImage(url: URL, size: CGSize? = nil) async throws {
-        let cacheKey = url.absoluteString
-        guard AZImageCache.shared[cacheKey] == nil else { return }
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            _ = cacheAndReturnImage(key: cacheKey, data: data, size: size)
-        } catch {
-            throw error
-        }
-    }
-    
-    public static func eagerLoadImages(from urlStrings: [String], size: CGSize? = nil) async throws {
-        let urls = urlStrings.compactMap { URL(string: $0) }
-        await withThrowingTaskGroup(of: Void.self) { group in
-            for url in urls {
-                group.addTask {
-                    try await self.eagerLoadImage(url: url, size: size)
+            AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size) { resizedImage in
+                DispatchQueue.main.async {
+                    self.uiImage = resizedImage
                 }
+            }
+        } else {
+            DispatchQueue.main.async {
+                self.uiImage = cachedImage
             }
         }
     }
     
     private static func cacheAndReturnImage(key: String,
                                             data: Data,
-                                            size: CGSize? = nil) -> UIImage? {
+                                            size: CGSize? = nil,
+                                            completion: @escaping (UIImage?) -> Void) {
         let originalImage = UIImage(data: data)
         AZImageCache.shared[key] = originalImage
         if let size = size {
-            let resizedImage = resizeImage(image: originalImage, targetSize: size)
-            return resizedImage
+            resizeImage(image: originalImage, targetSize: size) { resizedImage in
+                completion(resizedImage)
+            }
         } else {
-            return originalImage
+            completion(originalImage)
         }
     }
     
-    private static func resizeImage(image: UIImage?, targetSize: CGSize) -> UIImage? {
-        guard let image = image else { return nil }
-        let size = image.size
-        
-        let widthRatio = targetSize.width/size.width
-        let heightRatio = targetSize.height/size.height
-        
-        let ratio = widthRatio > heightRatio ? heightRatio : widthRatio
-        let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
-        let rect = CGRect(x: 0, y: 0, width: newSize.width, height: newSize.height)
-        
-        UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-        image.draw(in: rect)
-        let newImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        
-        return newImage
+    private static func resizeImage(image: UIImage?,
+                                    targetSize: CGSize,
+                                    completion: @escaping (UIImage?) -> Void) {
+        DispatchQueue.global(qos: .background).async {
+            guard let image = image else { completion(nil); return }
+            let size = image.size
+            
+            let widthRatio = targetSize.width/size.width
+            let heightRatio = targetSize.height/size.height
+            
+            let ratio = widthRatio > heightRatio ? heightRatio : widthRatio
+            let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+            let rect = CGRect(x: 0, y: 0, width: newSize.width, height: newSize.height)
+            
+            UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+            image.draw(in: rect)
+            let newImage = UIGraphicsGetImageFromCurrentImageContext()
+            UIGraphicsEndImageContext()
+            
+            completion(newImage)
+        }
     }
     
     public enum ServiceError: Error {
