@@ -47,14 +47,15 @@ public class AZCachedAsyncImageService: ObservableObject {
         let fileURL = directory.appendingPathComponent(fileName)
         if FileManager.default.fileExists(atPath: fileURL.path) {
             let data = try Data(contentsOf: fileURL)
-            publishImage(using: data, size: size)
+            await publishImage(using: data, size: size)
         } else {
             let (data, _) = try await URLSession.shared.data(from: url)
             try data.write(to: fileURL, options: [.atomicWrite, .completeFileProtection])
-            publishImage(using: data, size: size)
+            await publishImage(using: data, size: size)
         }
     }
     
+    @MainActor
     private func publishImage(using data: Data, size: CGSize?) {
         let cachedImage = UIImage(data: data)
         if let size = size {
