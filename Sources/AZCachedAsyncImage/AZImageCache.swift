@@ -1,5 +1,5 @@
 //
-//  ImageCache.swift
+//  AZImageCache.swift
 //  AZCachedAsyncImage
 //
 //  Created by Adam Zarn on 2/21/22.
@@ -7,8 +7,8 @@
 
 import UIKit
 
-class ImageCache: NSCache<NSString, UIImage> {
-    static let shared = ImageCache()
+class AZImageCache: NSCache<NSString, UIImage> {
+    static let shared = AZImageCache()
   
     subscript(key: String) -> UIImage? {
         get {

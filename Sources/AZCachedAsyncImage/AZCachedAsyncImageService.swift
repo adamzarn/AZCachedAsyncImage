@@ -7,49 +7,66 @@
 
 import SwiftUI
 
-public enum AZCachedAsyncImageServiceError: Error {
-    case invalidUrl
-}
-
 public class AZCachedAsyncImageService: ObservableObject {
     @Published var uiImage: UIImage?
     
-    internal func getImage(url: URL?, size: CGSize? = nil) async throws {
+    @MainActor
+    internal func getImage(url: URL?,
+                           cacheLocation: AZCacheLocation,
+                           size: CGSize?) async throws {
         guard let url = url else {
-            self.uiImage = UIImage()
-            throw AZCachedAsyncImageServiceError.invalidUrl
+            throw ServiceError.invalidUrl
         }
-        let cacheKey = AZCachedAsyncImageService.getKey(for: url, and: size)
-        if let uiImage = ImageCache.shared[cacheKey] {
-            DispatchQueue.main.async {
-                self.uiImage = uiImage
-            }
-        } else {
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                let uiImage = AZCachedAsyncImageService.cacheAndReturnImage(key: cacheKey,
-                                                                            data: data,
-                                                                            size: size)
-                DispatchQueue.main.async {
-                    self.uiImage = uiImage
-                }
-            } catch {
-                throw error
-            }
+        switch cacheLocation {
+        case .memory: try await storeAndRetrieveFromMemoryCache(url: url, size: size)
+        case .fileSystem(let directory): try await storeAndRetrieveFromFileSystemCache(directory: directory, url: url, size: size)
         }
     }
     
-    private static func getKey(for url: URL, and size: CGSize?) -> String {
-        var key = url.absoluteString
-        if let size = size {
-            key += "/\(size.width)/\(size.height)"
+    private func storeAndRetrieveFromMemoryCache(url: URL,
+                                                 size: CGSize?) async throws {
+        let cacheKey = url.absoluteString
+        if let cachedImage = AZImageCache.shared[cacheKey] {
+            if let size = size {
+                self.uiImage = AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size)
+            } else {
+                self.uiImage = cachedImage
+            }
+        } else {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let uiImage = AZCachedAsyncImageService.cacheAndReturnImage(key: cacheKey,
+                                                                        data: data,
+                                                                        size: size)
+            self.uiImage = uiImage
         }
-        return key
+    }
+    
+    private func storeAndRetrieveFromFileSystemCache(directory: URL?, url: URL, size: CGSize?) async throws {
+        let fileName = url.asValidFileName
+        let directory = directory ?? FileManager.documentsDirectory
+        let fileURL = directory.appendingPathComponent(fileName)
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            let data = try Data(contentsOf: fileURL)
+            publishImage(using: data, size: size)
+        } else {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            try data.write(to: fileURL, options: [.atomicWrite, .completeFileProtection])
+            publishImage(using: data, size: size)
+        }
+    }
+    
+    private func publishImage(using data: Data, size: CGSize?) {
+        let cachedImage = UIImage(data: data)
+        if let size = size {
+            self.uiImage = AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size)
+        } else {
+            self.uiImage = cachedImage
+        }
     }
     
     private static func eagerLoadImage(url: URL, size: CGSize? = nil) async throws {
-        let cacheKey = getKey(for: url, and: size)
-        guard ImageCache.shared[cacheKey] == nil else { return }
+        let cacheKey = url.absoluteString
+        guard AZImageCache.shared[cacheKey] == nil else { return }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             _ = cacheAndReturnImage(key: cacheKey, data: data, size: size)
@@ -73,12 +90,11 @@ public class AZCachedAsyncImageService: ObservableObject {
                                             data: Data,
                                             size: CGSize? = nil) -> UIImage? {
         let originalImage = UIImage(data: data)
+        AZImageCache.shared[key] = originalImage
         if let size = size {
             let resizedImage = resizeImage(image: originalImage, targetSize: size)
-            ImageCache.shared[key] = resizedImage
             return resizedImage
         } else {
-            ImageCache.shared[key] = originalImage
             return originalImage
         }
     }
@@ -100,5 +116,9 @@ public class AZCachedAsyncImageService: ObservableObject {
         UIGraphicsEndImageContext()
         
         return newImage
+    }
+    
+    public enum ServiceError: Error {
+        case invalidUrl
     }
 }
