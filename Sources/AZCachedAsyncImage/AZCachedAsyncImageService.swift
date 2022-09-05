@@ -10,7 +10,6 @@ import SwiftUI
 public class AZCachedAsyncImageService: ObservableObject {
     @Published var uiImage: UIImage?
     
-    @MainActor
     internal func getImage(url: URL?,
                            cacheLocation: AZCacheLocation,
                            size: CGSize?) async throws {
@@ -28,16 +27,22 @@ public class AZCachedAsyncImageService: ObservableObject {
         let cacheKey = url.absoluteString
         if let cachedImage = AZImageCache.shared[cacheKey] {
             if let size = size {
-                self.uiImage = AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size)
-            } else {
+                let resizedImage = AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size)
+                DispatchQueue.main.async {
+                    self.uiImage = resizedImage
+                }
+            }
+            DispatchQueue.main.async {
                 self.uiImage = cachedImage
             }
         } else {
             let (data, _) = try await URLSession.shared.data(from: url)
-            let uiImage = AZCachedAsyncImageService.cacheAndReturnImage(key: cacheKey,
-                                                                        data: data,
-                                                                        size: size)
-            self.uiImage = uiImage
+            let cachedImage = AZCachedAsyncImageService.cacheAndReturnImage(key: cacheKey,
+                                                                            data: data,
+                                                                            size: size)
+            DispatchQueue.main.async {
+                self.uiImage = cachedImage
+            }
         }
     }
     
@@ -47,20 +52,20 @@ public class AZCachedAsyncImageService: ObservableObject {
         let fileURL = directory.appendingPathComponent(fileName)
         if FileManager.default.fileExists(atPath: fileURL.path) {
             let data = try Data(contentsOf: fileURL)
-            await publishImage(using: data, size: size)
+            publishImage(using: data, size: size)
         } else {
             let (data, _) = try await URLSession.shared.data(from: url)
             try data.write(to: fileURL, options: [.atomicWrite, .completeFileProtection])
-            await publishImage(using: data, size: size)
+            publishImage(using: data, size: size)
         }
     }
     
-    @MainActor
     private func publishImage(using data: Data, size: CGSize?) {
-        let cachedImage = UIImage(data: data)
+        var cachedImage = UIImage(data: data)
         if let size = size {
-            self.uiImage = AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size)
-        } else {
+            cachedImage = AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size)
+        }
+        DispatchQueue.main.async {
             self.uiImage = cachedImage
         }
     }
