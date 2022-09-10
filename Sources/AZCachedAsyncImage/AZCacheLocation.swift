@@ -9,5 +9,5 @@ import Foundation
 
 public enum AZCacheLocation {
     case memory
-    case fileSystem(directory: URL?)
+    case fileSystem(directory: URL?, combinedFileSizesLimit: AZCombinedFileSizesLimit?)
 }

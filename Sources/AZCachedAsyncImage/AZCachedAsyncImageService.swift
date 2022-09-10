@@ -17,8 +17,14 @@ public class AZCachedAsyncImageService: ObservableObject {
             throw ServiceError.invalidUrl
         }
         switch cacheLocation {
-        case .memory: try await storeAndRetrieveFromMemoryCache(url: url, size: size)
-        case .fileSystem(let directory): try await storeAndRetrieveFromFileSystemCache(directory: directory, url: url, size: size)
+        case .memory:
+            try await storeAndRetrieveFromMemoryCache(url: url,
+                                                      size: size)
+        case .fileSystem(let directory, let combinedFileSizesLimit):
+            try await storeAndRetrieveFromFileSystemCache(directory: directory,
+                                                          combinedFileSizesLimit: combinedFileSizesLimit,
+                                                          url: url,
+                                                          size: size)
         }
     }
     
@@ -48,7 +54,10 @@ public class AZCachedAsyncImageService: ObservableObject {
         }
     }
     
-    private func storeAndRetrieveFromFileSystemCache(directory: URL?, url: URL, size: CGSize?) async throws {
+    private func storeAndRetrieveFromFileSystemCache(directory: URL?,
+                                                     combinedFileSizesLimit: AZCombinedFileSizesLimit?,
+                                                     url: URL,
+                                                     size: CGSize?) async throws {
         let fileName = url.asValidFileName
         let directory = directory ?? FileManager.documentsDirectory
         let fileURL = directory.appendingPathComponent(fileName)
@@ -60,6 +69,7 @@ public class AZCachedAsyncImageService: ObservableObject {
             try data.write(to: fileURL, options: [.atomicWrite, .completeFileProtection])
             publishImage(using: data, size: size)
         }
+        deleteFileIfNecessary(basedOn: combinedFileSizesLimit)
     }
     
     private func publishImage(using data: Data, size: CGSize?) {
@@ -73,6 +83,17 @@ public class AZCachedAsyncImageService: ObservableObject {
         } else {
             DispatchQueue.main.async {
                 self.uiImage = cachedImage
+            }
+        }
+    }
+    
+    private func deleteFileIfNecessary(basedOn combinedFileSizesLimit: AZCombinedFileSizesLimit?) {
+        if let combinedFileSizesLimit = combinedFileSizesLimit {
+            let urlsOfPreviouslyCachedFiles = FileManager.getAllURLs(in: FileManager.documentsDirectory,
+                                                                     withPrefix: FileManager.fileNamePrefix)
+            if combinedFileSizesLimit.asNumberOfBytes < urlsOfPreviouslyCachedFiles.combinedFileSizesInBytes {
+                try? FileManager.deleteOldestFile(in: FileManager.documentsDirectory,
+                                                  withPrefix: FileManager.fileNamePrefix)
             }
         }
     }

@@ -18,7 +18,7 @@ struct ContentView: View {
                 HStack {
                     Spacer()
                     AZCachedAsyncImage(url: URL(string: "https://picsum.photos/id/\(id)/4000")!,
-                                       cacheLocation: .fileSystem(directory: nil),
+                                       cacheLocation: .fileSystem(directory: nil, combinedFileSizesLimit: .megabytes(100)),
                                        size: CGSize(width: 300, height: 300),
                                        content: { image in
                         image
