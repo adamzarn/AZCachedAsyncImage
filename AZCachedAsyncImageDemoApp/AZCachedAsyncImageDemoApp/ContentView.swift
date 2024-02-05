@@ -17,7 +17,7 @@ struct ContentView: View {
             List(ids, id: \.self) { id in
                 HStack {
                     Spacer()
-                    AZCachedAsyncImage(url: URL(string: "https://picsum.photos/id/\(id)/4000")!,
+                    AZCachedAsyncImage(url: URL(string: "https://picsum.photos/id/\(id)/400")!,
                                        cacheLocation: .fileSystem(directory: nil, combinedFileSizesLimit: .megabytes(100)),
                                        size: CGSize(width: 300, height: 300),
                                        content: { image in
@@ -30,6 +30,8 @@ struct ContentView: View {
                             .fill(.gray)
                             .frame(width: UIScreen.main.bounds.width,
                                    height: UIScreen.main.bounds.width)
+                    }, onReceiveUIImage: { uiImage in
+                        print(uiImage.pngData()?.count ?? 0)
                     })
                     Spacer()
                 }
