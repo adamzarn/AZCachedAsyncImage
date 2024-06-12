@@ -32,6 +32,8 @@ struct ContentView: View {
                                    height: UIScreen.main.bounds.width)
                     }, onReceiveUIImage: { uiImage in
                         print(uiImage.pngData()?.count ?? 0)
+                    }, onReceiveCacheURL: { url in
+                        print(url.absoluteString)
                     })
                     Spacer()
                 }

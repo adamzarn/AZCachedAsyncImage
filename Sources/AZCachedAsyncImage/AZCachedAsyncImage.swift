@@ -16,6 +16,7 @@ public struct AZCachedAsyncImage<I: View, P: View>: View {
     let content: (Image) -> I
     let placeholder: () -> P
     let onReceiveUIImage: ((UIImage) -> Void)?
+    let onReceiveCacheURL: ((URL) -> Void)?
     
     /// - Parameters:
     ///     - url: The remote URL of the image.
@@ -24,18 +25,21 @@ public struct AZCachedAsyncImage<I: View, P: View>: View {
     ///     - content: Callback to modify the Image that displays the returned image.
     ///     - placeholder: Callback to provide the View that will display while the image is loading.
     ///     - onReceiveUIImage: Optional callback to get the underling UIImage.
+    ///     - onReceiveCacheURL: Optional callback to get the URL where the image was stored.
     public init(url: URL?,
                 cacheLocation: AZCacheLocation = .memory,
                 size: CGSize? = nil,
                 content: @escaping (Image) -> I,
                 placeholder: @escaping () -> P,
-                onReceiveUIImage: ((UIImage) -> Void)? = nil) {
+                onReceiveUIImage: ((UIImage) -> Void)? = nil,
+                onReceiveCacheURL: ((URL) -> Void)? = nil) {
         self.url = url
         self.cacheLocation = cacheLocation
         self.size = size
         self.content = content
         self.placeholder = placeholder
         self.onReceiveUIImage = onReceiveUIImage
+        self.onReceiveCacheURL = onReceiveCacheURL
     }
     
     public var body: some View {
@@ -56,6 +60,10 @@ public struct AZCachedAsyncImage<I: View, P: View>: View {
         .onReceive(imageService.$uiImage, perform: { uiImage in
             guard let uiImage = uiImage else { return }
             onReceiveUIImage?(uiImage)
+        })
+        .onReceive(imageService.$cacheURL, perform: { url in
+            guard let url = url else { return }
+            onReceiveCacheURL?(url)
         })
     }
 }

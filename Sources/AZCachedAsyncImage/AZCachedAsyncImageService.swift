@@ -9,6 +9,7 @@ import SwiftUI
 
 public class AZCachedAsyncImageService: ObservableObject {
     @Published var uiImage: UIImage?
+    @Published var cacheURL: URL?
     
     internal func getImage(url: URL?,
                            cacheLocation: AZCacheLocation,
@@ -63,26 +64,28 @@ public class AZCachedAsyncImageService: ObservableObject {
         let fileURL = directory.appendingPathComponent(fileName)
         if FileManager.default.fileExists(atPath: fileURL.path) {
             let data = try Data(contentsOf: fileURL)
-            publishImage(using: data, size: size)
+            publishImage(using: data, size: size, cacheURL: fileURL)
         } else {
             let (data, _) = try await URLSession.shared.data(from: url)
             try data.write(to: fileURL, options: [.atomicWrite, .completeFileProtection])
-            publishImage(using: data, size: size)
+            publishImage(using: data, size: size, cacheURL: fileURL)
         }
         deleteFileIfNecessary(basedOn: combinedFileSizesLimit)
     }
     
-    private func publishImage(using data: Data, size: CGSize?) {
+    private func publishImage(using data: Data, size: CGSize?, cacheURL: URL?) {
         let cachedImage = UIImage(data: data)
         if let size = size {
             AZCachedAsyncImageService.resizeImage(image: cachedImage, targetSize: size) { resizedImage in
                 DispatchQueue.main.async {
                     self.uiImage = resizedImage
+                    self.cacheURL = cacheURL
                 }
             }
         } else {
             DispatchQueue.main.async {
                 self.uiImage = cachedImage
+                self.cacheURL = cacheURL
             }
         }
     }
